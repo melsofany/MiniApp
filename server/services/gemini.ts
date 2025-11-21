@@ -28,16 +28,11 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `استخرج من البطاقة الشخصية المصرية فقط:
-1. الاسم الكامل (بالعربية فقط)
-2. الرقم القومي (14 رقماً فقط - بدون مسافات أو علامات)
+    const prompt = `من البطاقة الشخصية المصرية، استخرج فوراً:
+- الاسم الكامل (عربي)
+- الرقم القومي (14 رقم فقط)
 
-ملاحظات مهمة:
-- الرقم القومي: استخرج الأرقام ال14 فقط
-- الاسم: بالعربية كما هو في البطاقة
-- لا تضف أي تفسيرات، فقط البيانات المطلوبة
-
-إذا كانت الصورة مقلوبة، صححها قبل القراءة.`;
+صحح اتجاه الصورة تلقائياً واستخرج البيانات مباشرة.`;
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash-exp",
@@ -65,8 +60,8 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
 
     const response = await withTimeout(
       processPromise, 
-      15000,
-      "انتهى الوقت المحدد لمعالجة الصورة. حاول التقاط صورة أوضح."
+      3000,
+      "انتهى الوقت (3 ثواني). حاول التقاط صورة أوضح."
     );
 
     const rawJson = response.text;
