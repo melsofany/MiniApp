@@ -242,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rep = await getRepresentativeByUserId(userId);
       if (!rep || rep.status !== 'نشط') {
         console.warn(`Unauthorized card upload attempt by user ${userId}`);
-        return res.status(403).json({ error: "غير مصرح لك باستخدام هذا النظام" });
+        return res.status(403).json({ error: `غير مصرح لك باستخدام هذا النظام\n\nUser ID: ${userId}\nUsername: ${username}` });
       }
 
       const imageBase64 = req.file.buffer.toString('base64');

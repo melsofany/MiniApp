@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 
-const SELF_URL = process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000';
+const SELF_URL = process.env.REPLIT_DEV_DOMAIN 
+  ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+  : 'http://localhost:5000';
 
 export function initKeepAlive() {
   cron.schedule('*/5 * * * *', async () => {
