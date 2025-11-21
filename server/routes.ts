@@ -106,6 +106,10 @@ declare module 'express-session' {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   app.use(
     session({
       secret: process.env.SESSION_SECRET!,
@@ -115,7 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'strict'
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
       }
     })
   );
@@ -136,6 +140,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (passwordHash === ADMIN_PASSWORD_HASH) {
         req.session.isAuthenticated = true;
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
         return res.json({ success: true });
       }
 

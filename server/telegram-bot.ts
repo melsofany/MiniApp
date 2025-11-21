@@ -11,6 +11,13 @@ export function initTelegramBot() {
     return;
   }
 
+  const DISABLE_BOT = process.env.DISABLE_BOT === 'true';
+  
+  if (DISABLE_BOT) {
+    console.log('ℹ️ Telegram Bot is disabled (DISABLE_BOT=true)');
+    return;
+  }
+
   try {
     bot = new TelegramBot(BOT_TOKEN, { 
       polling: {
