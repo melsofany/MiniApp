@@ -34,68 +34,63 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `You are an expert in reading Egyptian national ID cards.
+    const prompt = `IMPORTANT: You are reading an EGYPTIAN NATIONAL ID CARD.
 
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
+The card has a SPECIFIC FORMAT for the name section. Look at the card image carefully.
 
-Egyptian ID cards have the full name written on TWO SEPARATE LINES:
+THE NAME IS WRITTEN IN TWO LINES - YOU MUST READ BOTH LINES:
 
-LINE 1 (TOP LINE) - Owner's First Name ONLY:
-- This is the name of the person who owns the ID card
-- Usually ONE word only
-- Examples: "محمد" or "فاطمة" or "أحمد" or "علي" or "سارة"
+┌─────────────────────────────────┐
+│  [PHOTO]    الاسم / Name        │
+│             ───────────          │
+│             محمد    ← LINE 1    │  ← This is the OWNER'S name (1 word)
+│             علي محمود حسن        │  ← This is father+grandfather+family (3-4 words)
+│                     ↑ LINE 2    │
+│                                 │
+│  الرقم القومى / National No.    │
+│  29501011234567                 │
+└─────────────────────────────────┘
 
-LINE 2 (BOTTOM LINE) - Father's name + Grandfather's name + Family name:
-- This starts with the FATHER's name (not repeating the owner's name)
-- Then grandfather's name, then family name
-- Usually 3-4 words
-- Examples: "علي محمود حسن" or "سعيد أحمد عبدالله" or "حسن علي محمد"
+STRUCTURE EXPLANATION:
+- LINE 1 (FIRST/TOP): The person's OWN name - usually ONE word
+- LINE 2 (SECOND/BOTTOM): Father's + Grandfather's + Family name - usually 3-4 words
 
-COMPLETE EXAMPLES:
+REAL EXAMPLES FROM EGYPTIAN IDS:
 
-Example 1:
-If the card shows:
-محمد
-علي محمود حسن
+Example A:
+What you see on card:
+الاسم: محمد           ← firstNameLine = "محمد"
+      علي محمود حسن    ← secondNameLine = "علي محمود حسن"
+Rقم قومي: 29501011234567
+Result: Full name = "محمد علي محمود حسن"
 
-Then you must extract:
-firstNameLine: "محمد" (owner's name)
-secondNameLine: "علي محمود حسن" (father + grandfather + family)
-Full name will be: "محمد علي محمود حسن"
+Example B:
+What you see on card:
+الاسم: فاطمة          ← firstNameLine = "فاطمة"
+      حسن سعيد محمد   ← secondNameLine = "حسن سعيد محمد"
+رقم قومي: 29612051234567
+Result: Full name = "فاطمة حسن سعيد محمد"
 
-Example 2:
-If the card shows:
-فاطمة
-حسن علي محمد
+Example C:
+What you see on card:
+الاسم: أحمد           ← firstNameLine = "أحمد"
+      سعيد محمود عبدالله ← secondNameLine = "سعيد محمود عبدالله"
+رقم قومي: 29403151234567
+Result: Full name = "أحمد سعيد محمود عبدالله"
 
-Then you must extract:
-firstNameLine: "فاطمة" (owner's name)
-secondNameLine: "حسن علي محمد" (father + grandfather + family)
-Full name will be: "فاطمة حسن علي محمد"
+YOUR TASK:
+1. Find the name section (usually has label "الاسم" or "Name")
+2. Read the FIRST line of the name → this is firstNameLine (owner's name)
+3. Read the SECOND line of the name → this is secondNameLine (father+grandfather+family)
+4. Find the national ID number (14 digits, usually labeled "الرقم القومى" or "National No.")
 
-Example 3:
-If the card shows:
-أحمد
-سعيد محمود عبدالله
-
-Then you must extract:
-firstNameLine: "أحمد" (owner's name)
-secondNameLine: "سعيد محمود عبدالله" (father + grandfather + family)
-Full name will be: "أحمد سعيد محمود عبدالله"
-
-❌ COMMON MISTAKES TO AVOID:
-1. DO NOT merge the two lines into one
-2. DO NOT skip the first line (owner's name)
-3. DO NOT repeat the first line in the second line
-4. The first line is ALWAYS the owner's name (usually 1 word)
-5. The second line is ALWAYS father + grandfather + family (usually 3-4 words)
-6. DO NOT swap the lines
-7. Read EXACTLY what is written on each line
-
-Extract the following:
-1. firstNameLine: The TOP line exactly as written (owner's name)
-2. secondNameLine: The BOTTOM line exactly as written (father + grandfather + family)
-3. nationalId: The 14-digit national ID number`;
+CRITICAL RULES:
+✓ ALWAYS extract BOTH lines of the name
+✓ The first line is usually 1 word (owner's name)
+✓ The second line is usually 3-4 words (family lineage)
+✓ DO NOT skip the first line
+✓ DO NOT merge the two lines before extraction
+✓ Extract each line EXACTLY as written`;
 
 
     const processPromise = ai.models.generateContent({
