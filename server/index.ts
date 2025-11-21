@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { initTelegramBot } from "./telegram-bot";
+import { initKeepAlive } from "./keep-alive";
 
 const app = express();
 
@@ -77,5 +79,11 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    initTelegramBot();
+    
+    initKeepAlive();
+    
+    log(`✓ All systems initialized successfully`);
   });
 })();
