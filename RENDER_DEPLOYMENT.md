@@ -74,6 +74,39 @@ NODE_ENV=production
 4. **انشر المشروع**
    - اضغط على "Create Web Service"
 
+5. **⚠️ إعداد Telegram Mini App Domain (مهم جداً!)**
+   
+   بعد نشر التطبيق على Render، يجب تسجيل الـ domain في BotFather:
+   
+   **الخطوات:**
+   
+   1. افتح [@BotFather](https://t.me/botfather) على Telegram
+   
+   2. أرسل الأمر: `/mybots`
+   
+   3. اختر البوت الخاص بك
+   
+   4. اختر **Bot Settings** → **Menu Button** → **Configure Menu Button**
+   
+   5. أرسل رابط التطبيق المصغر الكامل:
+      ```
+      https://your-app-name.onrender.com/mini-app
+      ```
+      ⚠️ **استبدل `your-app-name` باسم تطبيقك الفعلي على Render**
+   
+   6. أرسل اسم الزر (مثلاً): `فتح التطبيق`
+   
+   7. سترى رسالة تأكيد من BotFather
+   
+   **بدلاً من ذلك، يمكنك:**
+   
+   1. إرسال `/setmenubutton` لـ BotFather
+   2. اختر البوت
+   3. أرسل الرابط: `https://your-app-name.onrender.com/mini-app`
+   4. أرسل اسم الزر
+   
+   **ملاحظة:** Telegram يتحقق من أن الـ domain يعمل بشكل صحيح مع HTTPS قبل قبوله.
+
 ---
 
 ## ملاحظات مهمة
