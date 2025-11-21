@@ -252,9 +252,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await getCardByNationalId(extractedData.nationalId);
       if (existing) {
         console.info(`Duplicate card detected: ${extractedData.nationalId} by user ${userId}`);
+        
+        const originalRep = await getRepresentativeByUserId(existing.insertedByUserId);
+        const originalUsername = originalRep ? originalRep.username : existing.insertedByUsername;
+        
         return res.json({
           isDuplicate: true,
-          existingCard: existing
+          existingCard: {
+            ...existing,
+            insertedByUsername: originalUsername
+          }
         });
       }
 
