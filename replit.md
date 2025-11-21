@@ -76,6 +76,10 @@ TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
 # مفتاح Gemini AI (مطلوب)
 GEMINI_API_KEY=your-gemini-api-key
+
+# رابط Webhook لمنع نوم Render (اختياري - للاستخدام مع Render)
+# ضع رابط تطبيقك على Render هنا لمنع النوم بعد 15 دقيقة
+WEBHOOK_URL=https://your-app-name.onrender.com
 ```
 
 ## هيكل قاعدة البيانات (Google Sheets)
@@ -141,8 +145,17 @@ GEMINI_API_KEY=your-gemini-api-key
 
 ### 1. Keep-Alive System
 - يعمل كل 5 دقائق
-- يمنع نوم التطبيق على Render
-- endpoint: `/api/health`
+- يمنع نوم التطبيق على Render (خدمة الاستضافة)
+- يستخدم `WEBHOOK_URL` إذا كان موجوداً (للاستخدام مع Render)
+- يستخدم `REPLIT_DEV_DOMAIN` تلقائياً على Replit
+- endpoint: `/api/ping`
+
+**لاستخدامه مع Render:**
+1. انشر تطبيقك على Render
+2. احصل على رابط التطبيق (مثل: `https://your-app.onrender.com`)
+3. أضف متغير بيئي `WEBHOOK_URL` في إعدادات Render
+4. ضع قيمة الرابط (بدون `/api/ping`)
+5. النظام سيقوم تلقائياً بإرسال ping كل 5 دقائق لمنع النوم
 
 ### 2. Telegram Bot
 - يعمل 24/7
