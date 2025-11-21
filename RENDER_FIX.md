@@ -17,6 +17,14 @@
 - تغيير `sameSite` من 'strict' إلى 'none' في production
 - حفظ الـ session بشكل صريح بعد تسجيل الدخول
 
+### ✅ 3. مشكلة التطبيق المصغر (Mini App)
+**المشكلة**: البوت يرسل رابط Replit بدلاً من رابط Render.
+
+**الحل**:
+- البوت الآن يستخدم `WEBHOOK_URL` لتحديد رابط التطبيق المصغر
+- تأكد من إضافة `WEBHOOK_URL` في متغيرات Render
+- الرابط الكامل: `https://your-app-name.onrender.com` (بدون /mini-app)
+
 ---
 
 ## خطوات إعادة النشر على Render

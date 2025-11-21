@@ -59,11 +59,21 @@ export function initTelegramBot() {
             return;
           }
 
-          const miniAppUrl = process.env.REPLIT_DEV_DOMAIN 
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}/mini-app`
-            : 'https://yourdomain.replit.app/mini-app';
+          const baseUrl = process.env.WEBHOOK_URL 
+            || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null);
           
-          console.log('✓ Sending welcome message with mini app URL');
+          if (!baseUrl) {
+            console.error('❌ No WEBHOOK_URL or REPLIT_DEV_DOMAIN configured');
+            await bot!.sendMessage(
+              chatId,
+              '❌ خطأ في إعدادات التطبيق. يرجى التواصل مع المسؤول.'
+            );
+            return;
+          }
+
+          const miniAppUrl = `${baseUrl}/mini-app`;
+          
+          console.log('✓ Sending welcome message with mini app URL:', miniAppUrl);
           await bot!.sendMessage(
             chatId,
             `مرحباً ${username}! 👋\n\n` +

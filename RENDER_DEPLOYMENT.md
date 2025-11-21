@@ -35,7 +35,7 @@ ADMIN_PASSWORD=your_secure_password
 SESSION_SECRET=random_string_at_least_32_characters
 ```
 
-### 5. Keep-Alive System (لمنع نوم Render)
+### 5. WEBHOOK_URL (مهم جداً!)
 ```
 WEBHOOK_URL=https://your-app-name.onrender.com
 ```
@@ -43,9 +43,9 @@ WEBHOOK_URL=https://your-app-name.onrender.com
 ⚠️ **مهم جداً**: استبدل `your-app-name` باسم تطبيقك الفعلي على Render!
 
 **لماذا نحتاج WEBHOOK_URL؟**
-- التطبيقات المجانية على Render تنام بعد 15 دقيقة من عدم النشاط
-- النظام يرسل ping تلقائياً كل 5 دقائق لمنع النوم
-- WEBHOOK_URL يجب أن يكون رابط تطبيقك على Render (بدون `/api/ping`)
+1. **Keep-Alive System**: يمنع التطبيق من النوم بعد 15 دقيقة
+2. **Mini App URL**: يستخدمه البوت لإرسال رابط التطبيق المصغر الصحيح
+3. يجب أن يكون رابط تطبيقك الكامل على Render (بدون `/api/ping` أو `/mini-app`)
 
 ### 6. إعدادات البيئة الإنتاجية
 ```
