@@ -15,15 +15,18 @@ export function initTelegramBot() {
     bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
     bot.on('message', async (msg) => {
+      console.log('📨 Received message:', msg.text, 'from user:', msg.from?.id);
       const chatId = msg.chat.id;
       const userId = msg.from?.id.toString();
       const username = msg.from?.username || msg.from?.first_name || 'مستخدم';
 
       if (!userId) {
+        console.log('⚠️ No userId found in message');
         return;
       }
 
       if (msg.text === '/start') {
+        console.log('✓ Processing /start command for user:', userId);
         const rep = await getRepresentativeByUserId(userId);
 
         if (!rep || rep.status !== 'نشط') {
