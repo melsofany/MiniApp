@@ -35,7 +35,7 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
 صحح اتجاه الصورة تلقائياً واستخرج البيانات مباشرة.`;
 
     const processPromise = ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
