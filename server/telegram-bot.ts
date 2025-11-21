@@ -34,7 +34,9 @@ export function initTelegramBot() {
           return;
         }
 
-        const miniAppUrl = `${process.env.REPLIT_DEV_DOMAIN || 'https://yourdomain.replit.app'}/mini-app`;
+        const miniAppUrl = process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}/mini-app`
+          : 'https://yourdomain.replit.app/mini-app';
         
         await bot!.sendMessage(
           chatId,
