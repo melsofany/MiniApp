@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import type { Representative, NationalIdCard } from '@shared/schema';
 
-const SPREADSHEET_ID = '15hjsS5SvoZP2Qlt4tBSnczR40yZcn3HD31lpqU_BtVs';
+const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID || '15hjsS5SvoZP2Qlt4tBSnczR40yZcn3HD31lpqU_BtVs';
 
 let connectionSettings: any;
 
@@ -40,10 +40,28 @@ async function getAccessToken() {
 }
 
 async function getUncachableGoogleSheetClient() {
-  const accessToken = await getAccessToken();
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.sheets({ version: 'v4', auth: oauth2Client });
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: serviceAccount.client_email,
+        private_key: serviceAccount.private_key,
+      },
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file'
+      ],
+    });
+    
+    const authClient = await auth.getClient();
+    return google.sheets({ version: 'v4', auth: authClient });
+  } else {
+    const accessToken = await getAccessToken();
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    return google.sheets({ version: 'v4', auth: oauth2Client });
+  }
 }
 
 export async function getAllRepresentatives(): Promise<Representative[]> {
