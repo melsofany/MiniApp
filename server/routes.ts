@@ -35,28 +35,11 @@ const upload = multer({
   }
 });
 
-if (!process.env.ADMIN_PASSWORD) {
-  throw new Error('ADMIN_PASSWORD environment variable is required');
-}
-
-if (!process.env.SESSION_SECRET) {
-  throw new Error('SESSION_SECRET environment variable is required');
-}
-
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-  throw new Error('TELEGRAM_BOT_TOKEN environment variable is required');
-}
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
 function hashPassword(password: string): string {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
-const ADMIN_PASSWORD_HASH = hashPassword(ADMIN_PASSWORD);
-
-function verifyAndExtractTelegramData(initData: string): { valid: boolean; userId?: string; username?: string } {
+function verifyAndExtractTelegramData(initData: string, telegramBotToken: string): { valid: boolean; userId?: string; username?: string } {
   if (!initData) return { valid: false };
 
   try {
@@ -72,7 +55,7 @@ function verifyAndExtractTelegramData(initData: string): { valid: boolean; userI
 
     const secret = crypto
       .createHmac('sha256', 'WebAppData')
-      .update(TELEGRAM_BOT_TOKEN)
+      .update(telegramBotToken)
       .digest();
 
     const calculatedHash = crypto
@@ -106,13 +89,31 @@ declare module 'express-session' {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+  const SESSION_SECRET = process.env.SESSION_SECRET || '';
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+
+  if (!ADMIN_PASSWORD || !SESSION_SECRET || !TELEGRAM_BOT_TOKEN) {
+    const missing = [];
+    if (!ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
+    if (!SESSION_SECRET) missing.push('SESSION_SECRET');
+    if (!TELEGRAM_BOT_TOKEN) missing.push('TELEGRAM_BOT_TOKEN');
+    
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}. ` +
+      `Please set these in the Secrets tab in Replit.`
+    );
+  }
+
+  const ADMIN_PASSWORD_HASH = hashPassword(ADMIN_PASSWORD);
+
   if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
   }
 
   app.use(
     session({
-      secret: process.env.SESSION_SECRET!,
+      secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       cookie: { 
@@ -232,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { initData } = req.body;
 
-      const telegramData = verifyAndExtractTelegramData(initData);
+      const telegramData = verifyAndExtractTelegramData(initData, TELEGRAM_BOT_TOKEN);
       if (!telegramData.valid || !telegramData.userId || !telegramData.username) {
         console.warn('Invalid Telegram WebApp signature or missing user data');
         return res.status(403).json({ error: "توقيع تطبيق Telegram غير صالح" });
