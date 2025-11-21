@@ -34,41 +34,69 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `أنت خبير في قراءة البطاقات الشخصية المصرية.
+    const prompt = `You are an expert in reading Egyptian national ID cards.
 
-⚠️ تعليمات مهمة جداً:
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
 
-في البطاقة الشخصية المصرية، الاسم الكامل مكتوب على سطرين:
+Egyptian ID cards have the full name written on TWO SEPARATE LINES:
 
-✅ السطر الأول (في الأعلى): اسم صاحب البطاقة فقط
-   - مثال: "محمد" أو "فاطمة" أو "أحمد" أو "علي"
-   - هذا هو اسم الشخص صاحب البطاقة
+LINE 1 (TOP LINE) - Owner's First Name ONLY:
+- This is the name of the person who owns the ID card
+- Usually ONE word only
+- Examples: "محمد" or "فاطمة" or "أحمد" or "علي" or "سارة"
 
-✅ السطر الثاني (تحت السطر الأول مباشرة): باقي الاسم الكامل
-   - يبدأ باسم الأب، ثم الجد، ثم العائلة
-   - مثال: "علي محمود حسن" أو "سعيد أحمد عبدالله"
+LINE 2 (BOTTOM LINE) - Father's name + Grandfather's name + Family name:
+- This starts with the FATHER's name (not repeating the owner's name)
+- Then grandfather's name, then family name
+- Usually 3-4 words
+- Examples: "علي محمود حسن" or "سعيد أحمد عبدالله" or "حسن علي محمد"
 
-📋 مثال كامل:
-إذا كان مكتوب في البطاقة:
+COMPLETE EXAMPLES:
+
+Example 1:
+If the card shows:
 محمد
 علي محمود حسن
 
-فهذا يعني:
-- السطر الأول: "محمد" (اسم صاحب البطاقة)
-- السطر الثاني: "علي محمود حسن" (اسم الأب والجد والعائلة)
-- الاسم الكامل: "محمد علي محمود حسن"
+Then you must extract:
+firstNameLine: "محمد" (owner's name)
+secondNameLine: "علي محمود حسن" (father + grandfather + family)
+Full name will be: "محمد علي محمود حسن"
 
-🎯 المطلوب منك:
-1. اقرأ السطر الأول بالضبط كما هو مكتوب (firstNameLine) - لا تحذف منه شيء
-2. اقرأ السطر الثاني بالضبط كما هو مكتوب (secondNameLine) - لا تحذف منه شيء
-3. استخرج الرقم القومي (14 رقم)
+Example 2:
+If the card shows:
+فاطمة
+حسن علي محمد
 
-❌ أخطاء شائعة يجب تجنبها:
-- لا تدمج السطرين في سطر واحد
-- لا تأخذ جزء من السطر وتترك جزء
-- لا تبدل السطرين
-- السطر الأول هو دائماً في الأعلى (اسم صاحب البطاقة)
-- السطر الثاني هو دائماً في الأسفل (اسم الأب والجد والعائلة)`;
+Then you must extract:
+firstNameLine: "فاطمة" (owner's name)
+secondNameLine: "حسن علي محمد" (father + grandfather + family)
+Full name will be: "فاطمة حسن علي محمد"
+
+Example 3:
+If the card shows:
+أحمد
+سعيد محمود عبدالله
+
+Then you must extract:
+firstNameLine: "أحمد" (owner's name)
+secondNameLine: "سعيد محمود عبدالله" (father + grandfather + family)
+Full name will be: "أحمد سعيد محمود عبدالله"
+
+❌ COMMON MISTAKES TO AVOID:
+1. DO NOT merge the two lines into one
+2. DO NOT skip the first line (owner's name)
+3. DO NOT repeat the first line in the second line
+4. The first line is ALWAYS the owner's name (usually 1 word)
+5. The second line is ALWAYS father + grandfather + family (usually 3-4 words)
+6. DO NOT swap the lines
+7. Read EXACTLY what is written on each line
+
+Extract the following:
+1. firstNameLine: The TOP line exactly as written (owner's name)
+2. secondNameLine: The BOTTOM line exactly as written (father + grandfather + family)
+3. nationalId: The 14-digit national ID number`;
+
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -79,15 +107,15 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
           properties: {
             firstNameLine: { 
               type: "string",
-              description: "السطر الأول من الاسم - اسم صاحب البطاقة فقط بالضبط كما هو مكتوب - مثال: محمد، فاطمة، أحمد، علي"
+              description: "The TOP line of the name - the ID card OWNER'S name only (usually 1 word). Examples: محمد, فاطمة, أحمد, علي. This is NOT the father's name."
             },
             secondNameLine: { 
               type: "string",
-              description: "السطر الثاني من الاسم - اسم الأب والجد والعائلة بالضبط كما مكتوب - مثال: علي محمود حسن، سعيد أحمد عبدالله"
+              description: "The BOTTOM line of the name - father's name + grandfather's name + family name (usually 3-4 words). Examples: علي محمود حسن, سعيد أحمد عبدالله. This line does NOT include the owner's name."
             },
             nationalId: { 
               type: "string",
-              description: "الرقم القومي المكون من 14 رقم فقط - أرقام فقط بدون مسافات"
+              description: "The 14-digit national ID number - digits only without spaces"
             },
           },
           required: ["firstNameLine", "secondNameLine", "nationalId"],
@@ -122,8 +150,31 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       throw new Error("فشل استخراج البيانات. تأكد أن الصورة واضحة وتحتوي على البطاقة كاملة.");
     }
 
+    const firstLine = data.firstNameLine.trim();
+    const secondLine = data.secondNameLine.trim();
+
+    // التحقق من صحة البيانات
+    const firstLineWords = firstLine.split(/\s+/).filter(w => w.length > 0);
+    const secondLineWords = secondLine.split(/\s+/).filter(w => w.length > 0);
+
+    // السطر الأول يجب أن يكون كلمة واحدة أو كلمتين على الأكثر (اسم صاحب البطاقة)
+    if (firstLineWords.length > 2) {
+      console.warn(`⚠️ تحذير: السطر الأول يحتوي على ${firstLineWords.length} كلمات. المتوقع 1-2 كلمة فقط.`);
+    }
+
+    // السطر الثاني يجب أن يحتوي على 2-5 كلمات (اسم الأب + الجد + العائلة)
+    if (secondLineWords.length < 2) {
+      console.warn(`⚠️ تحذير: السطر الثاني يحتوي على ${secondLineWords.length} كلمة فقط. المتوقع 2-5 كلمات.`);
+    }
+
+    // التحقق من عدم تكرار الكلمات بين السطرين
+    const firstWord = firstLineWords[0];
+    if (secondLineWords.includes(firstWord)) {
+      console.warn(`⚠️ تحذير محتمل: الكلمة "${firstWord}" موجودة في كلا السطرين`);
+    }
+
     // دمج السطرين لتكوين الاسم الكامل
-    const fullName = `${data.firstNameLine.trim()} ${data.secondNameLine.trim()}`;
+    const fullName = `${firstLine} ${secondLine}`;
 
     const cleanedNationalId = data.nationalId.replace(/\D/g, '');
     
@@ -132,8 +183,8 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
     }
 
     console.log(`✓ تم استخراج البيانات بنجاح:`);
-    console.log(`  - السطر الأول: "${data.firstNameLine}"`);
-    console.log(`  - السطر الثاني: "${data.secondNameLine}"`);
+    console.log(`  - السطر الأول: "${firstLine}" (${firstLineWords.length} كلمة)`);
+    console.log(`  - السطر الثاني: "${secondLine}" (${secondLineWords.length} كلمة)`);
     console.log(`  - الاسم الكامل: "${fullName}"`);
     console.log(`  - الرقم القومي: "${cleanedNationalId}"`);
 
