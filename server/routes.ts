@@ -89,9 +89,14 @@ declare module 'express-session' {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-  const SESSION_SECRET = process.env.SESSION_SECRET || '';
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD?.trim() || '';
+  const SESSION_SECRET = process.env.SESSION_SECRET?.trim() || '';
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
+
+  console.log('Environment variable check:');
+  console.log('- ADMIN_PASSWORD:', ADMIN_PASSWORD ? '✓ Set' : '✗ Missing');
+  console.log('- SESSION_SECRET:', SESSION_SECRET ? '✓ Set' : '✗ Missing');
+  console.log('- TELEGRAM_BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? '✓ Set' : '✗ Missing');
 
   if (!ADMIN_PASSWORD || !SESSION_SECRET || !TELEGRAM_BOT_TOKEN) {
     const missing = [];
@@ -101,7 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}. ` +
-      `Please set these in the Secrets tab in Replit.`
+      `Please check the Secrets tab in Replit and ensure these secrets have values set.`
     );
   }
 
