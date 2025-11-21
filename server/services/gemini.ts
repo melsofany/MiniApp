@@ -8,8 +8,7 @@ export interface ExtractedCardData {
 }
 
 interface GeminiResponse {
-  firstNameLine: string;
-  secondNameLine: string;
+  nameLines: string[];
   nationalId: string;
 }
 
@@ -34,63 +33,46 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `IMPORTANT: You are reading an EGYPTIAN NATIONAL ID CARD.
+    const prompt = `Extract data from this Egyptian National ID card.
 
-The card has a SPECIFIC FORMAT for the name section. Look at the card image carefully.
+TASK: Read ALL text lines in the name section and return them in order.
 
-THE NAME IS WRITTEN IN TWO LINES - YOU MUST READ BOTH LINES:
+Egyptian ID cards show the name in multiple lines under the label "الاسم" or "Name":
+- Line 1: Usually 1-2 words (owner's first name)
+- Line 2: Usually 2-4 words (father, grandfather, family name)
+- Sometimes there are 3 lines
 
-┌─────────────────────────────────┐
-│  [PHOTO]    الاسم / Name        │
-│             ───────────          │
-│             محمد    ← LINE 1    │  ← This is the OWNER'S name (1 word)
-│             علي محمود حسن        │  ← This is father+grandfather+family (3-4 words)
-│                     ↑ LINE 2    │
-│                                 │
-│  الرقم القومى / National No.    │
-│  29501011234567                 │
-└─────────────────────────────────┘
+EXAMPLES:
 
-STRUCTURE EXPLANATION:
-- LINE 1 (FIRST/TOP): The person's OWN name - usually ONE word
-- LINE 2 (SECOND/BOTTOM): Father's + Grandfather's + Family name - usually 3-4 words
+Card showing:
+الاسم
+محمد
+علي محمود حسن
+رقم قومي: 29501011234567
 
-REAL EXAMPLES FROM EGYPTIAN IDS:
+Extract as:
+nameLines: ["محمد", "علي محمود حسن"]
+nationalId: "29501011234567"
 
-Example A:
-What you see on card:
-الاسم: محمد           ← firstNameLine = "محمد"
-      علي محمود حسن    ← secondNameLine = "علي محمود حسن"
-Rقم قومي: 29501011234567
-Result: Full name = "محمد علي محمود حسن"
+Card showing:
+Name
+فاطمة
+حسن سعيد
+محمد عبدالله
+National No: 29612051234567
 
-Example B:
-What you see on card:
-الاسم: فاطمة          ← firstNameLine = "فاطمة"
-      حسن سعيد محمد   ← secondNameLine = "حسن سعيد محمد"
-رقم قومي: 29612051234567
-Result: Full name = "فاطمة حسن سعيد محمد"
+Extract as:
+nameLines: ["فاطمة", "حسن سعيد", "محمد عبدالله"]
+nationalId: "29612051234567"
 
-Example C:
-What you see on card:
-الاسم: أحمد           ← firstNameLine = "أحمد"
-      سعيد محمود عبدالله ← secondNameLine = "سعيد محمود عبدالله"
-رقم قومي: 29403151234567
-Result: Full name = "أحمد سعيد محمود عبدالله"
+INSTRUCTIONS:
+1. Find the name section (labeled "الاسم" or "Name")
+2. Read ALL text lines under that label from top to bottom
+3. Put each line as a separate string in the nameLines array
+4. Do NOT merge lines, do NOT skip lines
+5. Extract the 14-digit national ID number
 
-YOUR TASK:
-1. Find the name section (usually has label "الاسم" or "Name")
-2. Read the FIRST line of the name → this is firstNameLine (owner's name)
-3. Read the SECOND line of the name → this is secondNameLine (father+grandfather+family)
-4. Find the national ID number (14 digits, usually labeled "الرقم القومى" or "National No.")
-
-CRITICAL RULES:
-✓ ALWAYS extract BOTH lines of the name
-✓ The first line is usually 1 word (owner's name)
-✓ The second line is usually 3-4 words (family lineage)
-✓ DO NOT skip the first line
-✓ DO NOT merge the two lines before extraction
-✓ Extract each line EXACTLY as written`;
+Return EXACTLY what you read, line by line, in order.`;
 
 
     const processPromise = ai.models.generateContent({
@@ -100,20 +82,17 @@ CRITICAL RULES:
         responseSchema: {
           type: "object",
           properties: {
-            firstNameLine: { 
-              type: "string",
-              description: "The TOP line of the name - the ID card OWNER'S name only (usually 1 word). Examples: محمد, فاطمة, أحمد, علي. This is NOT the father's name."
-            },
-            secondNameLine: { 
-              type: "string",
-              description: "The BOTTOM line of the name - father's name + grandfather's name + family name (usually 3-4 words). Examples: علي محمود حسن, سعيد أحمد عبدالله. This line does NOT include the owner's name."
+            nameLines: { 
+              type: "array",
+              items: { type: "string" },
+              description: "All lines of the name from the ID card in order from top to bottom. Each line is a separate string in the array. Do not merge lines. Example: ['محمد', 'علي محمود حسن'] or ['فاطمة', 'حسن سعيد', 'محمد']"
             },
             nationalId: { 
               type: "string",
               description: "The 14-digit national ID number - digits only without spaces"
             },
           },
-          required: ["firstNameLine", "secondNameLine", "nationalId"],
+          required: ["nameLines", "nationalId"],
         },
       },
       contents: [
@@ -141,47 +120,87 @@ CRITICAL RULES:
 
     const data: GeminiResponse = JSON.parse(rawJson);
 
-    if (!data.firstNameLine || !data.secondNameLine || !data.nationalId) {
+    if (!data.nameLines || !Array.isArray(data.nameLines) || data.nameLines.length === 0 || !data.nationalId) {
       throw new Error("فشل استخراج البيانات. تأكد أن الصورة واضحة وتحتوي على البطاقة كاملة.");
     }
 
-    const firstLine = data.firstNameLine.trim();
-    const secondLine = data.secondNameLine.trim();
+    // تنظيف الأسطر وإزالة الفراغات
+    const cleanedLines = data.nameLines
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
 
-    // التحقق من صحة البيانات
-    const firstLineWords = firstLine.split(/\s+/).filter(w => w.length > 0);
-    const secondLineWords = secondLine.split(/\s+/).filter(w => w.length > 0);
-
-    // السطر الأول يجب أن يكون كلمة واحدة أو كلمتين على الأكثر (اسم صاحب البطاقة)
-    if (firstLineWords.length > 2) {
-      console.warn(`⚠️ تحذير: السطر الأول يحتوي على ${firstLineWords.length} كلمات. المتوقع 1-2 كلمة فقط.`);
+    if (cleanedLines.length === 0) {
+      throw new Error("لم يتم العثور على أسطر الاسم. تأكد من وضوح الصورة.");
     }
 
-    // السطر الثاني يجب أن يحتوي على 2-5 كلمات (اسم الأب + الجد + العائلة)
-    if (secondLineWords.length < 2) {
-      console.warn(`⚠️ تحذير: السطر الثاني يحتوي على ${secondLineWords.length} كلمة فقط. المتوقع 2-5 كلمات.`);
+    // ========== معالجة ذكية للأسطر ==========
+    
+    // تحليل كل سطر لمعرفة عدد الكلمات
+    const linesWithWordCount = cleanedLines.map(line => ({
+      text: line,
+      wordCount: line.split(/\s+/).filter(w => w.length > 0).length
+    }));
+
+    console.log('📊 تحليل الأسطر المستخرجة:');
+    linesWithWordCount.forEach((line, idx) => {
+      console.log(`  السطر ${idx + 1}: "${line.text}" (${line.wordCount} كلمة)`);
+    });
+
+    let ownerName: string;
+    let familyLineage: string;
+
+    if (cleanedLines.length === 1) {
+      // سطر واحد فقط - نعتبره الاسم الكامل
+      console.log('⚠️ تحذير: تم استخراج سطر واحد فقط');
+      ownerName = cleanedLines[0];
+      familyLineage = '';
+    } else if (cleanedLines.length === 2) {
+      // حالة قياسية: سطرين
+      // السطر الأول = اسم صاحب البطاقة (عادة 1-2 كلمة)
+      // السطر الثاني = اسم الأب + الجد + العائلة (عادة 2-4 كلمات)
+      ownerName = cleanedLines[0];
+      familyLineage = cleanedLines[1];
+      
+      // التحقق من المنطقية
+      if (linesWithWordCount[0].wordCount > linesWithWordCount[1].wordCount) {
+        console.warn('⚠️ تحذير: السطر الأول يحتوي كلمات أكثر من الثاني - قد يكون هناك خطأ');
+      }
+    } else {
+      // 3 أسطر أو أكثر
+      // منطق ذكي: السطر الأول عادة هو الاسم الأول
+      // باقي الأسطر هي اسم الأب + الجد + العائلة
+      ownerName = cleanedLines[0];
+      familyLineage = cleanedLines.slice(1).join(' ');
+      
+      console.log(`ℹ️ تم دمج ${cleanedLines.length - 1} سطر للعائلة`);
     }
 
-    // التحقق من عدم تكرار الكلمات بين السطرين
-    const firstWord = firstLineWords[0];
-    if (secondLineWords.includes(firstWord)) {
-      console.warn(`⚠️ تحذير محتمل: الكلمة "${firstWord}" موجودة في كلا السطرين`);
-    }
+    // دمج الاسم الكامل
+    const fullName = familyLineage 
+      ? `${ownerName} ${familyLineage}`.trim()
+      : ownerName;
 
-    // دمج السطرين لتكوين الاسم الكامل
-    const fullName = `${firstLine} ${secondLine}`;
-
+    // التحقق من الرقم القومي
     const cleanedNationalId = data.nationalId.replace(/\D/g, '');
     
     if (cleanedNationalId.length !== 14) {
       throw new Error(`الرقم القومي غير مكتمل (${cleanedNationalId.length} رقم). التقط صورة أوضح للرقم القومي.`);
     }
 
-    console.log(`✓ تم استخراج البيانات بنجاح:`);
-    console.log(`  - السطر الأول: "${firstLine}" (${firstLineWords.length} كلمة)`);
-    console.log(`  - السطر الثاني: "${secondLine}" (${secondLineWords.length} كلمة)`);
-    console.log(`  - الاسم الكامل: "${fullName}"`);
-    console.log(`  - الرقم القومي: "${cleanedNationalId}"`);
+    // التحقق النهائي
+    const ownerWordCount = ownerName.split(/\s+/).filter(w => w.length > 0).length;
+    const fullNameWordCount = fullName.split(/\s+/).filter(w => w.length > 0).length;
+
+    if (fullNameWordCount < 2) {
+      console.warn('⚠️ تحذير: الاسم الكامل يحتوي على كلمة واحدة فقط');
+    }
+
+    console.log(`\n✅ ✅ ✅ تم استخراج البيانات بنجاح:`);
+    console.log(`  📝 اسم صاحب البطاقة: "${ownerName}" (${ownerWordCount} كلمة)`);
+    console.log(`  👨‍👩‍👦 باقي الاسم (أب+جد+عائلة): "${familyLineage}"`);
+    console.log(`  📄 الاسم الكامل: "${fullName}" (${fullNameWordCount} كلمة)`);
+    console.log(`  🆔 الرقم القومي: "${cleanedNationalId}"`);
+    console.log(`  📊 عدد الأسطر المستخرجة: ${cleanedLines.length}`);
 
     return {
       name: fullName,
