@@ -94,15 +94,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
 
   console.log('Environment variable check:');
-  console.log('- ADMIN_PASSWORD:', ADMIN_PASSWORD ? '✓ Set' : '✗ Missing');
-  console.log('- SESSION_SECRET:', SESSION_SECRET ? '✓ Set' : '✗ Missing');
-  console.log('- TELEGRAM_BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? '✓ Set' : '✗ Missing');
+  console.log('- ADMIN_PASSWORD:', ADMIN_PASSWORD ? '✓ Set' : '✗ Missing', `(length: ${process.env.ADMIN_PASSWORD?.length || 0})`);
+  console.log('- SESSION_SECRET:', SESSION_SECRET ? '✓ Set' : '✗ Missing', `(length: ${process.env.SESSION_SECRET?.length || 0})`);
+  console.log('- TELEGRAM_BOT_TOKEN:', TELEGRAM_BOT_TOKEN ? '✓ Set' : '✗ Missing', `(length: ${process.env.TELEGRAM_BOT_TOKEN?.length || 0})`);
+  console.log('- All env vars available:', Object.keys(process.env).filter(k => k.includes('ADMIN') || k.includes('TELEGRAM') || k.includes('SESSION')));
 
   if (!ADMIN_PASSWORD || !SESSION_SECRET || !TELEGRAM_BOT_TOKEN) {
     const missing = [];
     if (!ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
     if (!SESSION_SECRET) missing.push('SESSION_SECRET');
     if (!TELEGRAM_BOT_TOKEN) missing.push('TELEGRAM_BOT_TOKEN');
+    
+    console.error('\n⚠️ CRITICAL ERROR: Missing environment variables');
+    console.error('Please ensure you have added these secrets in the Replit Secrets tab.');
+    console.error('After adding secrets, the workflow should automatically restart.');
+    console.error('If it does not, you may need to manually stop and restart the workflow.\n');
     
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}. ` +
