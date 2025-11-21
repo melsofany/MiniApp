@@ -254,6 +254,7 @@ National No: 29612051234567
 - الرقم القومي يتكون من 14 رقم فقط (مثل: 29501011234567)
 - تأكد من قراءة كل الأرقام ال 14 بدقة تامة
 
+أرجع البيانات بصيغة JSON فقط.`;
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash",
