@@ -11,14 +11,16 @@ export function initTelegramBot() {
     return;
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    console.log('⚠ Telegram Bot disabled in development mode to avoid conflicts');
-    console.log('  The bot will only run in production.');
-    return;
-  }
-
   try {
-    bot = new TelegramBot(BOT_TOKEN, { polling: true });
+    bot = new TelegramBot(BOT_TOKEN, { 
+      polling: {
+        interval: 300,
+        autoStart: true,
+        params: {
+          timeout: 10
+        }
+      }
+    });
 
     bot.on('message', async (msg) => {
       console.log('📨 Received message:', msg.text, 'from user:', msg.from?.id);
@@ -67,8 +69,13 @@ export function initTelegramBot() {
       }
     });
 
-    bot.on('polling_error', (error) => {
-      console.error('Telegram Bot polling error:', error);
+    bot.on('polling_error', (error: any) => {
+      if (error.code === 'ETELEGRAM' && error.response?.body?.error_code === 409) {
+        console.warn('⚠ Bot conflict detected (409): Another bot instance is running.');
+        console.warn('  Please stop other instances or this bot will not receive messages.');
+      } else {
+        console.error('Telegram Bot polling error:', error.message || error);
+      }
     });
 
     console.log('✓ Telegram Bot started successfully');
