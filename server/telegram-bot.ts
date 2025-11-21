@@ -33,39 +33,52 @@ export function initTelegramBot() {
         return;
       }
 
-      if (msg.text === '/start') {
+      if (msg.text?.toLowerCase() === '/start') {
         console.log('✓ Processing /start command for user:', userId);
-        const rep = await getRepresentativeByUserId(userId);
+        
+        try {
+          const rep = await getRepresentativeByUserId(userId);
+          console.log('Representative found:', rep ? `${rep.username} (${rep.center})` : 'none');
 
-        if (!rep || rep.status !== 'نشط') {
+          if (!rep || rep.status !== 'نشط') {
+            console.log('❌ User not authorized or inactive');
+            await bot!.sendMessage(
+              chatId,
+              '❌ عذراً، أنت غير مصرح لك باستخدام هذا البوت.\n\nيرجى التواصل مع المسؤول للحصول على صلاحية الوصول.'
+            );
+            return;
+          }
+
+          const miniAppUrl = process.env.REPLIT_DEV_DOMAIN 
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}/mini-app`
+            : 'https://yourdomain.replit.app/mini-app';
+          
+          console.log('✓ Sending welcome message with mini app URL');
           await bot!.sendMessage(
             chatId,
-            '❌ عذراً، أنت غير مصرح لك باستخدام هذا البوت.\n\nيرجى التواصل مع المسؤول للحصول على صلاحية الوصول.'
-          );
-          return;
-        }
-
-        const miniAppUrl = process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}/mini-app`
-          : 'https://yourdomain.replit.app/mini-app';
-        
-        await bot!.sendMessage(
-          chatId,
-          `مرحباً ${username}! 👋\n\n` +
-          `أنت مصرح لك باستخدام نظام معالجة البطاقات.\n` +
-          `المركز: ${rep.center}\n\n` +
-          `اضغط على الزر أدناه لفتح التطبيق وبدء التقاط البطاقات.`,
-          {
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '📸 فتح التطبيق',
-                  web_app: { url: miniAppUrl }
-                }
-              ]]
+            `مرحباً ${username}! 👋\n\n` +
+            `أنت مصرح لك باستخدام نظام معالجة البطاقات.\n` +
+            `المركز: ${rep.center}\n\n` +
+            `اضغط على الزر أدناه لفتح التطبيق وبدء التقاط البطاقات.`,
+            {
+              reply_markup: {
+                inline_keyboard: [[
+                  {
+                    text: '📸 فتح التطبيق',
+                    web_app: { url: miniAppUrl }
+                  }
+                ]]
+              }
             }
-          }
-        );
+          );
+          console.log('✓ Welcome message sent successfully');
+        } catch (error) {
+          console.error('Error processing /start command:', error);
+          await bot!.sendMessage(
+            chatId,
+            '❌ حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.'
+          );
+        }
       }
     });
 
