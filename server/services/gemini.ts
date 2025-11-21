@@ -1,6 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+// Error messages in Arabic
+const ERROR_MESSAGES = {
+  PARSE_FAILED: "فشل قراءة استجابة الذكاء الاصطناعي. حاول مرة أخرى.",
+  EXTRACTION_FAILED: "فشل استخراج البيانات. تأكد أن الصورة واضحة وتحتوي على البطاقة كاملة.",
+  NAME_NOT_FOUND: "لم يتم العثور على الاسم كاملاً. تأكد من وضوح الصورة.",
+  NATIONAL_ID_NOT_FOUND: "لم يتم العثور على الرقم القومي. تأكد من ظهور الرقم القومي بوضوح في الصورة.",
+  NATIONAL_ID_INCOMPLETE: (len: number) => `الرقم القومي غير مكتمل (${len} رقم فقط من 14). التقط صورة أوضح للرقم القومي الكامل.`,
+  READ_CARD_FAILED: "فشل قراءة البطاقة. التقط صورة أوضح وحاول مرة أخرى.",
+  TIMEOUT: "انتهى الوقت المحدد. حاول مرة أخرى.",
+  TIMEOUT_LONG: "العملية استغرقت وقتاً طويلاً. حاول مرة أخرى بصورة أوضح.",
+  PROCESSING_FAILED: "فشل معالجة الصورة. تأكد من وضوح الصورة وحاول مرة أخرى.",
+  API_KEY_ERROR: "مفتاح API غير صحيح. تأكد من إعداد GEMINI_API_KEY."
+};
 
 export interface ExtractedCardData {
   name: string;
@@ -33,8 +48,91 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
   }
 }
 
+/**
+ * معالجة الصورة قبل إرسالها للذكاء الاصطناعي
+ * - تصحيح اتجاه الصورة تلقائياً
+ * - تحسين الجودة والوضوح
+ * - ضبط السطوع والتباين
+ * - تقليل الحجم للسرعة
+ */
+async function preprocessImage(imageBase64: string): Promise<string> {
+  try {
+    console.log('🖼️  بدء معالجة الصورة...');
+    
+    // تحويل من base64 إلى buffer
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    
+    // معالجة الصورة باستخدام Sharp
+    const processedBuffer = await sharp(imageBuffer)
+      // 1. تصحيح الاتجاه تلقائياً باستخدام بيانات EXIF
+      .rotate()
+      
+      // 2. تحويل لـ grayscale لتحسين قراءة النص (اختياري)
+      // .grayscale()
+      
+      // 3. ضبط حجم الصورة - الحد الأقصى 2000px للعرض (يحافظ على نسبة العرض للارتفاع)
+      .resize(2000, 2000, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      
+      // 4. زيادة الحدة (sharpness) لتحسين قراءة النص
+      .sharpen({
+        sigma: 1.5,  // مقدار الحدة
+        m1: 1.0,     // مستوى التفاصيل
+        m2: 2.0      // الحواف
+      })
+      
+      // 5. تحسين التباين (contrast)
+      .normalize({
+        lower: 1,
+        upper: 99
+      })
+      
+      // 6. ضبط السطوع والتباين بشكل يدوي
+      .modulate({
+        brightness: 1.1,  // زيادة السطوع بنسبة 10%
+        saturation: 0.9   // تقليل التشبع قليلاً
+      })
+      
+      // 7. تحويل إلى JPEG بجودة عالية
+      .jpeg({
+        quality: 95,
+        progressive: true,
+        optimizeScans: true
+      })
+      
+      // تحويل إلى Buffer
+      .toBuffer();
+    
+    // تحويل النتيجة إلى base64
+    const processedBase64 = processedBuffer.toString('base64');
+    
+    const originalSize = (imageBuffer.length / 1024).toFixed(2);
+    const processedSize = (processedBuffer.length / 1024).toFixed(2);
+    
+    console.log('✅ اكتملت معالجة الصورة:');
+    console.log('   📏 الحجم الأصلي:', originalSize, 'KB');
+    console.log('   📏 الحجم بعد المعالجة:', processedSize, 'KB');
+    console.log('   🔄 تصحيح الاتجاه: تلقائي');
+    console.log('   ✨ تحسين الجودة: نعم');
+    console.log('   🔍 زيادة الحدة: نعم');
+    console.log('   ☀️  تحسين السطوع والتباين: نعم');
+    
+    return processedBase64;
+  } catch (error: any) {
+    console.error('❌ Image preprocessing error:', error);
+    console.warn('⚠️  Will use original image without preprocessing');
+    // في حالة الخطأ، نرجع الصورة الأصلية
+    return imageBase64;
+  }
+}
+
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
+    // معالجة الصورة قبل إرسالها للذكاء الاصطناعي
+    const processedImageBase64 = await preprocessImage(imageBase64);
+    
     const prompt = `استخرج البيانات من البطاقة الشخصية المصرية.
 
 الهيكل المطلوب لاستخراج الاسم:
@@ -188,7 +286,7 @@ National No: 29612051234567
       contents: [
         {
           inlineData: {
-            data: imageBase64,
+            data: processedImageBase64,
             mimeType: "image/jpeg",
           },
         },
@@ -199,13 +297,13 @@ National No: 29612051234567
     const response = await withTimeout(
       processPromise, 
       30000,
-      "انتهى الوقت المحدد. حاول مرة أخرى."
+      ERROR_MESSAGES.TIMEOUT
     );
 
     const rawJson = response.text;
     
     if (!rawJson) {
-      throw new Error("فشل قراءة البطاقة. التقط صورة أوضح وحاول مرة أخرى.");
+      throw new Error(ERROR_MESSAGES.READ_CARD_FAILED);
     }
 
     console.log('🔍 استجابة Gemini AI الكاملة:', rawJson);
@@ -214,19 +312,19 @@ National No: 29612051234567
     try {
       data = JSON.parse(rawJson);
     } catch (parseError) {
-      console.error('❌ فشل تحليل JSON من Gemini:', parseError);
-      throw new Error("فشل قراءة استجابة الذكاء الاصطناعي. حاول مرة أخرى.");
+      console.error('❌ Failed to parse JSON from Gemini:', parseError);
+      throw new Error(ERROR_MESSAGES.PARSE_FAILED);
     }
 
-    console.log('📋 البيانات المستخرجة:');
-    console.log('  - السطر الأول:', data.firstLine || '❌ غير موجود');
-    console.log('  - السطر الثاني:', data.secondLine || '❌ غير موجود');
-    console.log('  - أسطر إضافية:', data.additionalLines || []);
-    console.log('  - الرقم القومي:', data.nationalId || '❌ غير موجود');
+    console.log('📋 Extracted data:');
+    console.log('  - First line:', data.firstLine || '❌ missing');
+    console.log('  - Second line:', data.secondLine || '❌ missing');
+    console.log('  - Additional lines:', data.additionalLines || []);
+    console.log('  - National ID:', data.nationalId || '❌ missing');
 
     // التحقق من وجود البيانات المطلوبة
     if (!data.firstLine || !data.secondLine || !data.nationalId) {
-      throw new Error("فشل استخراج البيانات. تأكد أن الصورة واضحة وتحتوي على البطاقة كاملة.");
+      throw new Error(ERROR_MESSAGES.EXTRACTION_FAILED);
     }
 
     // تنظيف الأسطر
@@ -237,27 +335,25 @@ National No: 29612051234567
       .filter(line => line.length > 0);
 
     if (!firstLine || !secondLine) {
-      throw new Error("لم يتم العثور على الاسم كاملاً. تأكد من وضوح الصورة.");
+      throw new Error(ERROR_MESSAGES.NAME_NOT_FOUND);
     }
 
-    console.log('\n📊 تحليل الأسطر المستخرجة:');
-    console.log(`┌─────────────────────────────────────────────────────┐`);
-    console.log(`│ السطر الأول (اسم الشخص فقط):                       │`);
-    console.log(`│ "${firstLine}"`.padEnd(54) + '│');
-    console.log(`│ عدد الكلمات: ${firstLine.split(/\s+/).filter(w => w.length > 0).length}`.padEnd(54) + '│');
-    console.log(`├─────────────────────────────────────────────────────┤`);
-    console.log(`│ السطر الثاني (اسم الأب + الجد + العائلة):          │`);
-    console.log(`│ "${secondLine}"`.padEnd(54) + '│');
-    console.log(`│ عدد الكلمات: ${secondLine.split(/\s+/).filter(w => w.length > 0).length}`.padEnd(54) + '│');
+    console.log('\n\n📊 تحليل الأسطر المستخرجة');
+    console.log('==============================================');
+    console.log('First line (owner name):', firstLine);
+    console.log('Word count:', firstLine.split(/\s+/).filter(w => w.length > 0).length);
+    console.log('----------------------------------------------');
+    console.log('Second line (father + grandfather + family):', secondLine);
+    console.log('Word count:', secondLine.split(/\s+/).filter(w => w.length > 0).length);
     
     if (additionalLines.length > 0) {
-      console.log(`├─────────────────────────────────────────────────────┤`);
-      console.log(`│ أسطر إضافية:                                       │`);
+      console.log('----------------------------------------------');
+      console.log('Additional lines:');
       additionalLines.forEach((line, idx) => {
-        console.log(`│ السطر ${idx + 3}: "${line}"`.padEnd(54) + '│');
+        console.log('  Line', idx + 3, ':', line);
       });
     }
-    console.log(`└─────────────────────────────────────────────────────┘`);
+    console.log('==============================================');
 
     // بناء الاسم الكامل بالترتيب الصحيح
     // الاسم الكامل = السطر الأول + السطر الثاني + أي أسطر إضافية
@@ -267,62 +363,61 @@ National No: 29612051234567
     // تنظيف الرقم القومي
     const cleanedNationalId = data.nationalId.replace(/\D/g, '');
     
-    console.log(`🔢 تنظيف الرقم القومي: "${data.nationalId}" → "${cleanedNationalId}" (${cleanedNationalId.length} رقم)`);
+    console.log('🔢 National ID cleanup:', data.nationalId, '->', cleanedNationalId, '(', cleanedNationalId.length, 'digits)');
     
     if (!cleanedNationalId || cleanedNationalId.length === 0) {
-      console.error('❌ الرقم القومي فارغ تماماً!');
-      throw new Error("لم يتم العثور على الرقم القومي. تأكد من ظهور الرقم القومي بوضوح في الصورة.");
+      console.error('❌ National ID is completely empty');
+      throw new Error(ERROR_MESSAGES.NATIONAL_ID_NOT_FOUND);
     }
     
     if (cleanedNationalId.length !== 14) {
-      console.error(`❌ الرقم القومي غير مكتمل: ${cleanedNationalId.length} رقم بدلاً من 14`);
-      throw new Error(`الرقم القومي غير مكتمل (${cleanedNationalId.length} رقم فقط من 14). التقط صورة أوضح للرقم القومي الكامل.`);
+      console.error('National ID incomplete:', cleanedNationalId.length, 'digits instead of 14');
+      throw new Error(ERROR_MESSAGES.NATIONAL_ID_INCOMPLETE(cleanedNationalId.length));
     }
 
     // التحقق النهائي من عدد الكلمات
     const totalWords = fullName.split(/\s+/).filter(w => w.length > 0).length;
     
     if (totalWords < 2) {
-      console.warn('⚠️ تحذير: الاسم الكامل يحتوي على كلمة واحدة فقط - قد يكون هناك خطأ في القراءة');
+      console.warn('⚠️ Warning: Full name contains only one word - there may be a reading error');
     }
 
     if (totalWords > 6) {
-      console.warn('⚠️ تحذير: الاسم الكامل يحتوي على أكثر من 6 كلمات - تحقق من صحة الاستخراج');
+      console.warn('⚠️ Warning: Full name contains more than 6 words - verify extraction accuracy');
     }
 
-    console.log(`\n✅ ✅ ✅ تم استخراج البيانات بنجاح:`);
-    console.log(`╔═══════════════════════════════════════════════════════════╗`);
-    console.log(`║ 📝 الاسم الكامل الكامل:                                  ║`);
-    console.log(`║ "${fullName}"`.padEnd(60) + '║');
-    console.log(`║                                                           ║`);
-    console.log(`║ 👤 تفصيل الأسطر:                                         ║`);
-    console.log(`║ • السطر الأول: "${firstLine}"`.padEnd(60) + '║');
-    console.log(`║ • السطر الثاني: "${secondLine}"`.padEnd(60) + '║');
+    console.log('\n✅ ✅ ✅ Data extraction successful');
+    console.log('==============================================');
+    console.log('📝 Full name:', fullName);
+    console.log('');
+    console.log('👤 Line breakdown:');
+    console.log('  • First line:', firstLine);
+    console.log('  • Second line:', secondLine);
     if (additionalLines.length > 0) {
       additionalLines.forEach((line, idx) => {
-        console.log(`║ • السطر ${idx + 3}: "${line}"`.padEnd(60) + '║');
+        console.log('  • Line', idx + 3, ':', line);
       });
     }
-    console.log(`║                                                           ║`);
-    console.log(`║ 🆔 الرقم القومي: ${cleanedNationalId}`.padEnd(60) + '║');
-    console.log(`║ 📊 إجمالي عدد الكلمات: ${totalWords}`.padEnd(60) + '║');
-    console.log(`╚═══════════════════════════════════════════════════════════╝`);
+    console.log('');
+    console.log('🆔 National ID:', cleanedNationalId);
+    console.log('📊 Total words:', totalWords);
+    console.log('==============================================');
 
     return {
       name: fullName,
       nationalId: cleanedNationalId
     };
   } catch (error: any) {
-    console.error("❌ خطأ في Gemini AI:", error);
+    console.error("Gemini AI error:", error);
     
-    if (error.message.includes("timeout") || error.message.includes("انتهى الوقت")) {
-      throw new Error("العملية استغرقت وقتاً طويلاً. حاول مرة أخرى بصورة أوضح.");
+    if (error.message && (error.message.includes("timeout") || error.message.includes(ERROR_MESSAGES.TIMEOUT))) {
+      throw new Error(ERROR_MESSAGES.TIMEOUT_LONG);
     }
     
-    if (error.message.includes("API key")) {
-      throw new Error("مفتاح API غير صحيح. تأكد من إعداد GEMINI_API_KEY.");
+    if (error.message && error.message.includes("API key")) {
+      throw new Error(ERROR_MESSAGES.API_KEY_ERROR);
     }
     
-    throw new Error(error.message || "فشل معالجة الصورة. تأكد من وضوح الصورة وحاول مرة أخرى.");
+    throw new Error(error.message || ERROR_MESSAGES.PROCESSING_FAILED);
   }
 }
