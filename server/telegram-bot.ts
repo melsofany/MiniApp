@@ -11,6 +11,12 @@ export function initTelegramBot() {
     return;
   }
 
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⚠ Telegram Bot disabled in development mode to avoid conflicts');
+    console.log('  The bot will only run in production.');
+    return;
+  }
+
   try {
     bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
