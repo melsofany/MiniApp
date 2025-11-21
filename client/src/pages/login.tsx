@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Lock, Shield } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [password, setPassword] = useState("");
@@ -24,11 +24,14 @@ export default function Login() {
       const result = await response.json();
       
       if (result.success) {
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/session"] });
+        
         toast({
           title: "تم تسجيل الدخول بنجاح",
           description: "مرحباً بك في لوحة التحكم",
         });
-        setLocation("/dashboard");
+        
+        window.location.href = "/dashboard";
       }
     } catch (error: any) {
       toast({
