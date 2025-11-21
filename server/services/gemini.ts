@@ -7,6 +7,12 @@ export interface ExtractedCardData {
   nationalId: string;
 }
 
+interface GeminiResponse {
+  firstNameLine: string;
+  secondNameLine: string;
+  nationalId: string;
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
   let timeoutHandle: NodeJS.Timeout;
   
@@ -28,28 +34,22 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `أنت خبير في قراءة البطاقات الشخصية المصرية. 
+    const prompt = `أنت خبير في قراءة البطاقات الشخصية المصرية.
 
-في البطاقة المصرية، الاسم الكامل موزع على سطرين منفصلين:
-- السطر الأول (في الأعلى): يحتوي على الاسم الأول فقط لصاحب البطاقة
-- السطر الثاني (تحته مباشرة): يحتوي على اسم الأب ثم الجد ثم العائلة
+في البطاقة المصرية، الاسم يظهر على سطرين منفصلين:
 
-المطلوب:
-1. اقرأ السطر الأول (الاسم الأول)
-2. اقرأ السطر الثاني (اسم الأب + الجد + العائلة)
-3. اجمعهم معاً بمسافة بينهم لتحصل على الاسم الرباعي الكامل
-4. اقرأ الرقم القومي (14 رقماً فقط)
+السطر الأول (الأعلى): الاسم الأول فقط
+مثال: "محمد" أو "فاطمة" أو "أحمد"
 
-أمثلة توضيحية:
-- إذا كان السطر الأول: "محمد"
-  والسطر الثاني: "أحمد علي حسن"
-  → الاسم الكامل: "محمد أحمد علي حسن"
+السطر الثاني (الأسفل): اسم الأب + الجد + العائلة
+مثال: "علي محمود حسن"
 
-- إذا كان السطر الأول: "فاطمة"
-  والسطر الثاني: "محمود حسن علي"
-  → الاسم الكامل: "فاطمة محمود حسن علي"
+استخرج:
+1. السطر الأول للاسم (firstNameLine)
+2. السطر الثاني للاسم (secondNameLine)
+3. الرقم القومي (14 رقم)
 
-مهم جداً: لا تتجاهل السطر الأول! يجب دمج السطرين معاً.`;
+ملاحظة مهمة جداً: السطران منفصلان - لا تدمجهما! أعطني كل سطر لوحده.`;
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -58,16 +58,20 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
         responseSchema: {
           type: "object",
           properties: {
-            name: { 
+            firstNameLine: { 
               type: "string",
-              description: "الاسم الكامل الرباعي: يجب دمج السطر الأول (الاسم الأول) مع السطر الثاني (اسم الأب + الجد + العائلة) - مثال: محمد أحمد علي حسن"
+              description: "السطر الأول من الاسم - الاسم الأول فقط مثل: محمد، أحمد، فاطمة"
+            },
+            secondNameLine: { 
+              type: "string",
+              description: "السطر الثاني من الاسم - اسم الأب والجد والعائلة مثل: علي محمود حسن"
             },
             nationalId: { 
               type: "string",
               description: "الرقم القومي المكون من 14 رقم فقط"
             },
           },
-          required: ["name", "nationalId"],
+          required: ["firstNameLine", "secondNameLine", "nationalId"],
         },
       },
       contents: [
@@ -93,11 +97,14 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       throw new Error("فشل قراءة البطاقة. التقط صورة أوضح وحاول مرة أخرى.");
     }
 
-    const data: ExtractedCardData = JSON.parse(rawJson);
+    const data: GeminiResponse = JSON.parse(rawJson);
 
-    if (!data.name || !data.nationalId) {
+    if (!data.firstNameLine || !data.secondNameLine || !data.nationalId) {
       throw new Error("فشل استخراج البيانات. تأكد أن الصورة واضحة وتحتوي على البطاقة كاملة.");
     }
+
+    // دمج السطرين لتكوين الاسم الكامل
+    const fullName = `${data.firstNameLine.trim()} ${data.secondNameLine.trim()}`;
 
     const cleanedNationalId = data.nationalId.replace(/\D/g, '');
     
@@ -105,8 +112,14 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       throw new Error(`الرقم القومي غير مكتمل (${cleanedNationalId.length} رقم). التقط صورة أوضح للرقم القومي.`);
     }
 
+    console.log(`✓ تم استخراج البيانات بنجاح:`);
+    console.log(`  - السطر الأول: "${data.firstNameLine}"`);
+    console.log(`  - السطر الثاني: "${data.secondNameLine}"`);
+    console.log(`  - الاسم الكامل: "${fullName}"`);
+    console.log(`  - الرقم القومي: "${cleanedNationalId}"`);
+
     return {
-      name: data.name.trim(),
+      name: fullName,
       nationalId: cleanedNationalId
     };
   } catch (error: any) {
