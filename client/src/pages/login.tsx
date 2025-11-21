@@ -20,7 +20,8 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const result = await apiRequest<{ success: boolean }>("POST", "/api/auth/login", { password });
+      const response = await apiRequest("POST", "/api/auth/login", { password });
+      const result = await response.json();
       
       if (result.success) {
         toast({
