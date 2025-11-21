@@ -28,8 +28,16 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
 
 export async function processIdCardImage(imageBase64: string): Promise<ExtractedCardData> {
   try {
-    const prompt = `استخرج من البطاقة المصرية:
-الاسم والرقم القومي (14 رقم)`;
+    const prompt = `من البطاقة الشخصية المصرية، استخرج:
+
+1. الاسم الكامل: 
+   - السطر الأول (الاسم الأول لصاحب البطاقة)
+   - السطر الثاني (اسم الأب والجد والعائلة)
+   - اجمعهم معاً بالترتيب
+   
+2. الرقم القومي: 14 رقم فقط
+
+مثال: إذا كان السطر الأول "محمد" والثاني "أحمد علي حسن"، الاسم الكامل = "محمد أحمد علي حسن"`;
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -38,8 +46,14 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
         responseSchema: {
           type: "object",
           properties: {
-            name: { type: "string" },
-            nationalId: { type: "string" },
+            name: { 
+              type: "string",
+              description: "الاسم الكامل: الاسم الأول + اسم الأب + الجد + العائلة"
+            },
+            nationalId: { 
+              type: "string",
+              description: "الرقم القومي 14 رقم"
+            },
           },
           required: ["name", "nationalId"],
         },
