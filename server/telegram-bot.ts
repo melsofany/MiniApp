@@ -44,7 +44,10 @@ export function initTelegramBot() {
             console.log('❌ User not authorized or inactive');
             await bot!.sendMessage(
               chatId,
-              '❌ عذراً، أنت غير مصرح لك باستخدام هذا البوت.\n\nيرجى التواصل مع المسؤول للحصول على صلاحية الوصول.'
+              `❌ عذراً، أنت غير مصرح لك باستخدام هذا البوت.\n\n` +
+              `معرف المستخدم: ${userId}\n` +
+              `الاسم: ${username}\n\n` +
+              `يرجى التواصل مع المسؤول وإرساله هذه المعلومات للحصول على صلاحية الوصول.`
             );
             return;
           }
