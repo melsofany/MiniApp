@@ -57,69 +57,38 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
  */
 async function preprocessImage(imageBase64: string): Promise<string> {
   try {
-    console.log('🖼️  بدء معالجة الصورة لتحسين قراءة الرقم القومي...');
     
     // تحويل من base64 إلى buffer
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     
-    // معالجة الصورة باستخدام Sharp - تحسين خاص لقراءة الأرقام
+    // معالجة الصورة باستخدام Sharp - معالجة سريعة محسنة
     const processedBuffer = await sharp(imageBuffer)
-      // 1. تصحيح الاتجاه تلقائياً باستخدام بيانات EXIF
+      // 1. تصحيح الاتجاه تلقائياً
       .rotate()
       
-      // 2. تحويل لـ grayscale لتحسين قراءة الأرقام بشكل أفضل
-      .grayscale()
-      
-      // 3. ضبط حجم الصورة - الحد الأقصى 1600px للسرعة مع الحفاظ على الجودة
-      .resize(1600, 1600, {
+      // 2. ضبط حجم الصورة - 1024px للسرعة القصوى
+      .resize(1024, 1024, {
         fit: 'inside',
-        withoutEnlargement: true
+        withoutEnlargement: true,
+        kernel: 'nearest'  // أسرع kernel
       })
       
-      // 4. زيادة الحدة بشكل متوازن لتحسين وضوح الأرقام
-      .sharpen({
-        sigma: 1.5,  // حدة معتدلة للأرقام
-        m1: 1.2,     // مستوى تفاصيل متوازن
-        m2: 2.5      // حواف واضحة للأرقام
-      })
+      // 3. زيادة الحدة الخفيفة
+      .sharpen()
       
-      // 5. تحسين التباين بشكل أقوى لإبراز الأرقام
-      .normalize({
-        lower: 2,
-        upper: 98
-      })
-      
-      // 6. زيادة السطوع والتباين لجعل الأرقام أكثر وضوحاً
-      .modulate({
-        brightness: 1.1,   // سطوع متوازن
-        saturation: 0.8    // تقليل التشبع لجعل الأرقام أوضح
-      })
-      
-      // 7. تحويل إلى JPEG بجودة محسنة للسرعة
+      // 4. تحويل إلى JPEG بجودة سريعة
       .jpeg({
-        quality: 85,       // جودة متوازنة بين الوضوح والسرعة
+        quality: 75,
         progressive: false,
-        optimizeScans: false
+        optimizeScans: false,
+        chromaSubsampling: '4:4:4'
       })
       
       // تحويل إلى Buffer
       .toBuffer();
     
     // تحويل النتيجة إلى base64
-    const processedBase64 = processedBuffer.toString('base64');
-    
-    const originalSize = (imageBuffer.length / 1024).toFixed(2);
-    const processedSize = (processedBuffer.length / 1024).toFixed(2);
-    
-    console.log('✅ اكتملت معالجة الصورة:');
-    console.log('   📏 الحجم الأصلي:', originalSize, 'KB');
-    console.log('   📏 الحجم بعد المعالجة:', processedSize, 'KB');
-    console.log('   🔄 تصحيح الاتجاه: تلقائي');
-    console.log('   ✨ تحسين الجودة: نعم');
-    console.log('   🔍 زيادة الحدة: نعم');
-    console.log('   ☀️  تحسين السطوع والتباين: نعم');
-    
-    return processedBase64;
+    return processedBuffer.toString('base64');
   } catch (error: any) {
     console.error('❌ Image preprocessing error:', error);
     console.warn('⚠️  Will use original image without preprocessing');
@@ -133,26 +102,11 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
     // معالجة الصورة قبل إرسالها للذكاء الاصطناعي
     const processedImageBase64 = await preprocessImage(imageBase64);
     
-    const prompt = `استخرج البيانات من البطاقة الشخصية المصرية.
-
-🚨 الرقم القومي (الأهم!):
-• 14 رقم بالضبط بدون مسافات
-• ابحث عن "الرقم القومي" أو "National ID"
-• استخدم أرقام إنجليزية (0-9) فقط - ليس (٠-٩)
-• مثال: 29501011234567
-
-الاسم:
-• firstLine: السطر الأول تحت كلمة "الاسم"
-• secondLine: السطر الثاني
-• additionalLines: أسطر إضافية إن وجدت ([] إن لم توجد)
-
-مثال:
-{
-  "firstLine": "أحمد محمد",
-  "secondLine": "حسن علي السيد",
-  "additionalLines": [],
-  "nationalId": "29501011234567"
-}`;
+    const prompt = `Extract Egyptian ID data:
+- nationalId: 14 English digits (0-9), no spaces. Example: 29501011234567
+- firstLine: First name line
+- secondLine: Second name line  
+- additionalLines: Extra lines ([] if none)`;
 
     const processPromise = ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -195,7 +149,7 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
 
     const response = await withTimeout(
       processPromise, 
-      12000,
+      8000,
       ERROR_MESSAGES.TIMEOUT
     );
 
@@ -215,11 +169,6 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       throw new Error(ERROR_MESSAGES.PARSE_FAILED);
     }
 
-    console.log('📋 Extracted data:');
-    console.log('  - First line:', data.firstLine || '❌ missing');
-    console.log('  - Second line:', data.secondLine || '❌ missing');
-    console.log('  - Additional lines:', data.additionalLines || []);
-    console.log('  - National ID:', data.nationalId || '❌ missing');
 
     // التحقق من وجود البيانات المطلوبة
     if (!data.firstLine || !data.secondLine || !data.nationalId) {
@@ -237,22 +186,6 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       throw new Error(ERROR_MESSAGES.NAME_NOT_FOUND);
     }
 
-    console.log('\n\n📊 تحليل الأسطر المستخرجة');
-    console.log('==============================================');
-    console.log('First line (owner name):', firstLine);
-    console.log('Word count:', firstLine.split(/\s+/).filter(w => w.length > 0).length);
-    console.log('----------------------------------------------');
-    console.log('Second line (father + grandfather + family):', secondLine);
-    console.log('Word count:', secondLine.split(/\s+/).filter(w => w.length > 0).length);
-    
-    if (additionalLines.length > 0) {
-      console.log('----------------------------------------------');
-      console.log('Additional lines:');
-      additionalLines.forEach((line, idx) => {
-        console.log('  Line', idx + 3, ':', line);
-      });
-    }
-    console.log('==============================================');
 
     // بناء الاسم الكامل بالترتيب الصحيح
     // الاسم الكامل = السطر الأول + السطر الثاني + أي أسطر إضافية
@@ -275,7 +208,6 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
     const convertedNationalId = convertArabicNumeralsToEnglish(data.nationalId);
     const cleanedNationalId = convertedNationalId.replace(/\D/g, '');
     
-    console.log('🔢 National ID cleanup:', data.nationalId, '->', cleanedNationalId, '(', cleanedNationalId.length, 'digits)');
     
     if (!cleanedNationalId || cleanedNationalId.length === 0) {
       console.error('❌ National ID is completely empty');
@@ -298,22 +230,7 @@ export async function processIdCardImage(imageBase64: string): Promise<Extracted
       console.warn('⚠️ Warning: Full name contains more than 6 words - verify extraction accuracy');
     }
 
-    console.log('\n✅ ✅ ✅ Data extraction successful');
-    console.log('==============================================');
-    console.log('📝 Full name:', fullName);
-    console.log('');
-    console.log('👤 Line breakdown:');
-    console.log('  • First line:', firstLine);
-    console.log('  • Second line:', secondLine);
-    if (additionalLines.length > 0) {
-      additionalLines.forEach((line, idx) => {
-        console.log('  • Line', idx + 3, ':', line);
-      });
-    }
-    console.log('');
-    console.log('🆔 National ID:', cleanedNationalId);
-    console.log('📊 Total words:', totalWords);
-    console.log('==============================================');
+    console.log('✅ نجح:', fullName, '|', cleanedNationalId);
 
     return {
       name: fullName,
